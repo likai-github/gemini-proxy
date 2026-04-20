@@ -1,5 +1,5 @@
 // --- 配置区 ---
-const ACCESS_PASSWORD = "1314112"; 
+const ACCESS_PASSWORD = "1314113"; 
 const COOKIE_NAME = "gemini_access_token";
 
 export default {
