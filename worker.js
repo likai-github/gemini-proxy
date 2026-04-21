@@ -137,7 +137,7 @@ function getHTML() {
     <header class="bg-white/80 backdrop-blur-md border-b px-6 py-4 flex justify-between items-center shadow-sm">
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">G</div>
-        <span class="text-xl font-bold text-slate-800">Gemini AI</span>
+        <span class="text-xl font-bold text-slate-800">Gemini AI1</span>
       </div>
       <select id="model-select" class="bg-slate-100 border-none rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
           <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Lite</option>
