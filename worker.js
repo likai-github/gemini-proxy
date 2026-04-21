@@ -1,101 +1,55 @@
-// --- 配置区 ---
-const ACCESS_PASSWORD = "1314113"; 
+// --- 核心配置 ---
+const ACCESS_PASSWORD = "131411"; 
 const COOKIE_NAME = "gemini_access_token";
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // 1. 处理登录请求
     if (url.pathname === "/login" && request.method === "POST") {
       const formData = await request.formData();
-      const password = formData.get("password");
-
-      if (password === ACCESS_PASSWORD) {
-        return new Response("登录成功", {
+      if (formData.get("password") === ACCESS_PASSWORD) {
+        return new Response("OK", {
           status: 302,
-          headers: {
-            "Location": "/",
-            "Set-Cookie": `${COOKIE_NAME}=${password}; Path=/; HttpOnly; Max-Age=2592000`
+          headers: { 
+            "Location": "/", 
+            "Set-Cookie": COOKIE_NAME + "=" + ACCESS_PASSWORD + "; Path=/; HttpOnly; Max-Age=2592000; SameSite=Lax" 
           }
         });
-      } else {
-        return new Response("密码错误！", { status: 403 });
       }
+      return new Response("密码错误", { status: 403 });
     }
 
-    // 2. 鉴权校验
-    const cookieString = request.headers.get("Cookie") || "";
-    const cookies = Object.fromEntries(cookieString.split('; ').map(x => x.split('=')));
-    const isAuthorized = cookies[COOKIE_NAME] === ACCESS_PASSWORD;
-
-    if (!isAuthorized) {
-      return new Response(getLoginHTML(), {
-        headers: { "Content-Type": "text/html;charset=UTF-8" }
-      });
+    const cookies = Object.fromEntries((request.headers.get("Cookie") || "").split('; ').map(x => x.split('=')));
+    if (cookies[COOKIE_NAME] !== ACCESS_PASSWORD) {
+      return new Response(getLoginHTML(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
     }
 
-    // 3. 聊天界面
     if (url.pathname === "/" || url.pathname === "/index.html") {
-      return new Response(getHTML(), {
-        headers: { "Content-Type": "text/html;charset=UTF-8" }
-      });
+      return new Response(getHTML(), { headers: { "Content-Type": "text/html;charset=UTF-8" } });
     }
 
-    // 4. API 代理
     if (url.pathname.startsWith("/v1")) {
-      const targetHost = 'generativelanguage.googleapis.com';
-      const targetURL = 'https://' + targetHost + url.pathname + url.search;
-
-      const newHeaders = new Headers(request.headers);
-      newHeaders.set('Host', targetHost);
-      newHeaders.set('X-Forwarded-For', '1.1.1.1'); 
-
+      const targetURL = new URL('https://generativelanguage.googleapis.com' + url.pathname + url.search);
+      targetURL.searchParams.set('key', env.GOOGLE_API_KEY);
+      
       const newRequest = new Request(targetURL, {
         method: request.method,
-        headers: newHeaders,
-        body: request.method === 'POST' ? request.body : null,
-        redirect: 'follow'
+        headers: {
+          ...Object.fromEntries(request.headers),
+          'Host': 'generativelanguage.googleapis.com',
+          'X-Forwarded-For': '1.1.1.1'
+        },
+        body: request.method === 'POST' ? request.body : null
       });
-
-      try {
-        let response = await fetch(newRequest);
-        let newResponseHeaders = new Headers(response.headers);
-        newResponseHeaders.set('Access-Control-Allow-Origin', '*');
-        return new Response(response.body, {
-          status: response.status,
-          headers: newResponseHeaders
-        });
-      } catch (e) {
-        return new Response("代理错误: " + e.message, { status: 500 });
-      }
+      return fetch(newRequest);
     }
-
     return new Response("Not Found", { status: 404 });
   }
 };
 
 function getLoginHTML() {
-  return `
-  <!DOCTYPE html>
-  <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8">
-    <title>身份验证</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body class="bg-gray-900 h-screen flex items-center justify-center">
-    <form action="/login" method="POST" class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
-      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">请输入访问密码</h2>
-      <input type="password" name="password" autofocus
-        class="w-full border-2 border-gray-200 rounded-lg px-4 py-3 mb-4 focus:border-blue-500 outline-none transition-all">
-      <button type="submit" 
-        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">
-        进入系统
-      </button>
-    </form>
-  </body>
-  </html>`;
+  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><script src="https://cdn.tailwindcss.com"></script></head><body class="bg-slate-900 h-screen flex items-center justify-center"><form action="/login" method="POST" class="bg-white/10 backdrop-blur-lg p-8 rounded-2xl border border-white/20 shadow-2xl w-80 text-center"><h2 class="text-white text-2xl mb-6 font-bold">验证身份</h2><input type="password" name="password" autofocus class="w-full bg-white/10 text-white border border-white/20 rounded-xl px-4 py-3 mb-4 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password"><button class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">进入</button></form></body></html>`;
 }
 
 function getHTML() {
@@ -105,144 +59,172 @@ function getHTML() {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini 智能助手</title>
+    <title>Gemini Pro Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome/css/font-awesome.min.css">
     <style>
-      .prose pre { background: #1e1e1e; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 0.5rem 0; }
-      .prose code { font-family: monospace; color: #e06c75; }
-      .prose pre code { color: #dcdcdc; background: transparent; }
-      .prose ul { list-style-type: disc; padding-left: 1.5rem; }
-      .prose ol { list-style-type: decimal; padding-left: 1.5rem; }
-      .prose p { margin-bottom: 0.5rem; }
-      #user-input { scrollbar-width: none; min-height: 44px; max-height: 200px; }
-    </style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+  body { font-family: 'Inter', sans-serif; background: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; margin:0; }
+  
+  #chat-box { 
+    flex: 1; 
+    overflow-y: auto; 
+    padding: 1.5rem; 
+    scroll-behavior: smooth; 
+    max-width: 900px; /* 稍微增加容器宽度 */
+    margin: 0 auto; 
+    width: 100%;
+  }
+  
+  /* 消息气泡基础样式 */
+  .message-bubble { 
+    max-width: 80%; /* 缩小最大宽度 */
+    padding: 0.75rem 1rem; 
+    border-radius: 1rem; 
+    margin-bottom: 1rem; 
+    line-height: 1.5;
+    font-size: 0.95rem; /* 稍微减小字号，显得更精致 */
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  .user-m { 
+    background: #4f46e5; 
+    color: white; 
+    border-bottom-right-radius: 0.2rem; 
+    margin-left: auto; 
+    width: fit-content;
+  }
+
+  .bot-m { 
+    background: white; 
+    border: 1px solid #e2e8f0; 
+    border-bottom-left-radius: 0.2rem; 
+    color: #1e293b; 
+  }
+
+  /* 核心：限制代码块和超长回复 */
+  .bot-m pre {
+    background: #1e1e1e !important;
+    padding: 10px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+    max-height: 400px; /* 限制代码块高度，防止一个代码块占满全屏 */
+  }
+
+  .bot-m code {
+    font-size: 0.85rem;
+    font-family: 'Fira Code', monospace;
+  }
+
+  /* 针对列表和段落的间距微调 */
+  .bot-m p { margin-bottom: 0.5rem; }
+  .bot-m ul, .bot-m ol { margin-left: 1.5rem; margin-bottom: 0.5rem; }
+
+  /* 输入框容器 */
+  .input-wrapper {
+    width: 95% !important;
+    max-width: 700px !important;
+    margin: 0 auto 10px auto !important;
+  }
+</style>
   </head>
-  <body class="bg-gray-100 h-screen flex flex-col font-sans">
-    <header class="bg-white shadow-sm p-4 flex justify-between items-center">
-      <h1 class="font-bold text-xl text-blue-600">Gemini 3.x Flash</h1>
-      <div class="flex gap-2">
-        <button onclick="clearChat()" class="text-sm text-gray-500 hover:text-red-500 px-2">清空对话</button>
-        <select id="model-select" class="border rounded-md px-2 py-1 text-sm focus:outline-none bg-gray-50">
-          <option value="gemini-3-flash-preview">Gemini 3 Flash</option>  
-          <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash lite</option>
-        </select>
+  <body>
+    <header class="bg-white/80 backdrop-blur-md border-b px-6 py-4 flex justify-between items-center shadow-sm">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">G</div>
+        <span class="text-xl font-bold text-slate-800">Gemini AI</span>
       </div>
+      <select id="model-select" class="bg-slate-100 border-none rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500">
+          <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Lite</option>
+          <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+      </select>
     </header>
 
-    <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-6">
-      <div class="bg-blue-50 p-3 rounded-lg max-w-[85%] self-start shadow-sm text-gray-700 text-sm">
-        系统就绪。对话历史已开启，请输入你的问题。
+    <main id="chat-box">
+      <div id="welcome" class="text-center py-20">
+        <h1 class="text-4xl font-bold text-slate-900 mb-2">Hello, Master.</h1>
+        <p class="text-slate-500 text-sm font-mono uppercase tracking-widest">Input size optimized</p>
       </div>
-    </div>
+    </main>
 
-    <div class="p-4 bg-white border-t">
-      <div class="max-w-4xl mx-auto flex items-end gap-2 bg-gray-50 p-2 rounded-xl border focus-within:border-blue-400 transition-all">
+    <footer class="p-6 bg-transparent">
+      <div class="input-wrapper bg-white rounded-[24px] p-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200 focus-within:border-indigo-400 transition-all">
         <textarea id="user-input" rows="1" 
-          class="flex-1 bg-transparent border-none px-3 py-2 focus:ring-0 outline-none resize-none overflow-y-auto" 
+          class="flex-1 bg-transparent p-3 ml-2 outline-none resize-none text-slate-700 placeholder-slate-400 min-h-[44px] max-h-[150px] leading-6" 
           placeholder="问问 Gemini..."></textarea>
-        <button id="send-btn" onclick="sendMessage()" 
-          class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors flex items-center justify-center min-w-[60px] h-[40px]">
-          发送
+        
+        <button id="send-btn" 
+          class="bg-indigo-600 text-white w-10 h-10 flex flex-shrink-0 items-center justify-center rounded-full hover:bg-indigo-700 active:scale-90 transition-all mb-1 mr-1 shadow-md">
+          <i class="fa fa-paper-plane" style="font-size: 14px;"></i>
         </button>
       </div>
-      <p class="text-[10px] text-gray-400 text-center mt-2">Shift+Enter 换行 | Enter 发送</p>
-    </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js" async></script>
 
     <script>
-      // 1. 初始化对话历史 (用于支持上下文)
-      let chatHistory = [];
+      var historyList = [];
+      var chatBox = document.getElementById('chat-box');
+      var userInput = document.getElementById('user-input');
+      var sendBtn = document.getElementById('send-btn');
 
-      // 配置 Markdown 渲染
-      marked.setOptions({
-        highlight: function(code, lang) {
-          return hljs.highlightAuto(code).value;
-        },
-        breaks: true
-      });
-
-      function clearChat() {
-        chatHistory = [];
-        document.getElementById('chat-box').innerHTML = '<div class="text-center text-gray-400 text-xs py-4">对话已清空</div>';
+      function addMessage(role, content, id) {
+        var welcome = document.getElementById('welcome');
+        if(welcome) welcome.remove();
+        var div = document.createElement('div');
+        div.className = 'message-bubble ' + (role === 'user' ? 'user-m' : 'bot-m animate-in fade-in');
+        if(id) div.id = id;
+        if(role === 'user') { div.textContent = content; } 
+        else { div.innerHTML = marked.parse(content); }
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
       }
 
-      // 输入框自动高度调整
-      const textarea = document.getElementById('user-input');
-      textarea.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-      });
+      async function sendMessage() {
+        var text = userInput.value.trim();
+        if (!text) return;
+        addMessage('user', text);
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        var botId = 'bot-' + Date.now();
+        addMessage('bot', '...', botId);
 
-      textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        try {
+          var model = document.getElementById('model-select').value;
+          var res = await fetch('/v1beta/models/' + model + ':generateContent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: historyList.concat([{role:'user', parts:[{text: text}]}] ) })
+          });
+          var data = await res.json();
+          var reply = data.candidates[0].content.parts[0].text;
+          historyList.push({role:'user', parts:[{text: text}]}, {role:'model', parts:[{text: reply}]});
+          var botDiv = document.getElementById(botId);
+          botDiv.innerHTML = marked.parse(reply);
+          botDiv.querySelectorAll('pre code').forEach(function(el) { hljs.highlightElement(el); });
+        } catch (e) {
+          document.getElementById(botId).innerHTML = '<span style="color:#ef4444">Error: ' + e.message + '</span>';
+        }
+      }
+
+      sendBtn.onclick = sendMessage;
+      userInput.onkeydown = function(e) {
+        if(e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           sendMessage();
         }
-      });
-
-      async function sendMessage() {
-        const input = document.getElementById('user-input');
-        const box = document.getElementById('chat-box');
-        const modelSelect = document.getElementById('model-select');
-        const sendBtn = document.getElementById('send-btn');
-        
-        if (!input.value.trim() || sendBtn.disabled) return;
-
-        const userMsg = input.value.trim();
-        const selectedModel = modelSelect.value;
-        
-        // 显示用户消息
-        box.innerHTML += \`
-          <div class="flex justify-end">
-            <div class="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-tr-none max-w-[85%] shadow-sm whitespace-pre-wrap">\${userMsg}</div>
-          </div>\`;
-        
-        // 更新历史记录
-        chatHistory.push({ role: "user", parts: [{ text: userMsg }] });
-        
-        input.value = '';
-        input.style.height = 'auto';
-        sendBtn.disabled = true;
-        sendBtn.innerHTML = '<span class="animate-pulse">...</span>';
-        box.scrollTop = box.scrollHeight;
-
-        try {
-          // 修改 API Key 建议放到环境变量中更安全
-          const apiUrl = "/v1beta/models/" + selectedModel + ":generateContent?key=AIzaSyDeyujuwTb6xhI22DzkW2emqB0HenspZrw";
-          
-          const res = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // 发送完整的 chatHistory 数组实现上下文联动
-            body: JSON.stringify({ contents: chatHistory })
-          });
-          
-          const data = await res.json();
-          if (data.error) throw new Error(data.error.message);
-
-          const reply = data.candidates[0].content.parts[0].text;
-          
-          // 更新历史记录 (保存 AI 的回复)
-          chatHistory.push({ role: "model", parts: [{ text: reply }] });
-
-          // 渲染 Markdown
-          const renderedReply = marked.parse(reply);
-          
-          box.innerHTML += \`
-            <div class="flex justify-start">
-              <div class="bg-white p-4 rounded-2xl rounded-tl-none max-w-[90%] shadow-sm border border-gray-100 prose text-gray-800 overflow-x-auto">\${renderedReply}</div>
-            </div>\`;
-          
-        } catch (e) {
-          box.innerHTML += '<div class="text-red-500 text-center text-sm">错误: ' + e.message + '</div>';
-        } finally {
-          sendBtn.disabled = false;
-          sendBtn.innerText = '发送';
-          box.scrollTop = box.scrollHeight;
-        }
-      }
+      };
+      
+      // 自动高度脚本
+      userInput.oninput = function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+      };
     </script>
   </body>
   </html>`;
